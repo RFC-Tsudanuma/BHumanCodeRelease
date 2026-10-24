@@ -27,7 +27,12 @@ GameControllerDataProvider::GameControllerDataProvider()
 {
   // Initialize socket
   VERIFY(socket.setBlocking(false));
+#ifdef TARGET_MUJOCO
+  // All simulated robots run on the same PC, so each one gets its own port (see Src/Apps/BHumanMuJoCo).
+  VERIFY(socket.bind("0.0.0.0", GAMECONTROLLER_DATA_PORT + 10000 + Global::getSettings().playerNumber));
+#else
   VERIFY(socket.bind("0.0.0.0", GAMECONTROLLER_DATA_PORT));
+#endif
 }
 
 void GameControllerDataProvider::update(GameControllerData& theGameControllerData)

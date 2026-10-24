@@ -15,6 +15,7 @@
 #include "Platform/File.h"
 #include "Platform/SystemCall.h"
 #include "Platform/Time.h"
+#include <algorithm>
 #ifdef TARGET_ROBOT
 #include <fcntl.h>
 #include <linux/input.h>
@@ -32,6 +33,12 @@ namespace Main
   extern booster::robot::light::LightControlClient ledControl;
 }
 using namespace Main;
+#elif defined TARGET_MUJOCO
+namespace Main
+{
+  extern std::string topicPrefix; /**< The prefix of the topics of the simulated robot, e.g. "rt/robot_6/". */
+}
+using namespace Main;
 #endif
 
 thread_local BoosterProvider* BoosterProvider::theInstance = nullptr;
@@ -39,26 +46,36 @@ thread_local BoosterProvider* BoosterProvider::theInstance = nullptr;
 BoosterProvider::BoosterProvider()
 #ifdef TARGET_ROBOT
   : lowCmdPublisher(booster::robot::b1::kTopicJointCtrl),
-    buttonEventSubscriber("rt/button_even2", [this](const void* msg)
-      {buttonEventHandler(*reinterpret_cast<const booster_interface::msg::ButtonEventMsg*>(msg));}),
     lowStateSubscriber(booster::robot::b1::kTopicLowState, [this](const void* msg)
       {lowStateHandler(*reinterpret_cast<const booster_interface::msg::LowState*>(msg));}),
+    buttonEventSubscriber("rt/button_even2", [this](const void* msg)
+      {buttonEventHandler(*reinterpret_cast<const booster_interface::msg::ButtonEventMsg*>(msg));}),
     remoteControllerStateSubscriber("rt/remote_controller_stat2", [this](const void* msg)
       {remoteControllerStateHandler(*reinterpret_cast<const booster_interface::msg::RemoteControllerState*>(msg));}),
     robotStatusSubscriber("rt/device_gateway", [this](const void* msg)
       {robotStatusHandler(*reinterpret_cast<const booster_interface::msg::RobotStatusDdsMsg*>(msg));})
+#elif defined TARGET_MUJOCO
+  : lowCmdPublisher(topicPrefix + "joint_ctrl"),
+    lowStateSubscriber(topicPrefix + "low_state", [this](const void* msg)
+      {lowStateHandler(*reinterpret_cast<const booster_interface::msg::LowState*>(msg));})
 #endif
 {
   theInstance = this;
-#ifdef TARGET_ROBOT
+#ifdef BOOSTER_SDK
   lowCmdPublisher.InitChannel();
   lowStateSubscriber.InitChannel();
+#endif
+#ifdef TARGET_ROBOT
   remoteControllerStateSubscriber.InitChannel();
   robotStatusSubscriber.InitChannel();
+#endif
+#ifdef BOOSTER_SDK
   lowCmd.cmd_type(booster_interface::msg::SERIAL);
   lowCmd.motor_cmd(std::vector<booster_interface::msg::MotorCmd>(jointMapping.size()));
   systemSensorData.emergencyMode = true;
   connectedJoints = lowCmd.motor_cmd().size();
+#endif
+#ifdef TARGET_ROBOT
   if(Global::getSettings().robotType == Settings::k1)
   {
     buttonEventSubscriber.InitChannel();
@@ -88,6 +105,8 @@ BoosterProvider::~BoosterProvider()
     buttonEventSubscriber.CloseChannel();
   robotStatusSubscriber.CloseChannel();
   remoteControllerStateSubscriber.CloseChannel();
+#endif
+#ifdef BOOSTER_SDK
   lowStateSubscriber.CloseChannel();
   lowCmdPublisher.CloseChannel();
 #endif
@@ -108,6 +127,17 @@ void BoosterProvider::update([[maybe_unused]] KeyStates& theKeyStates)
   // Overlay provided key states with press of F1 in emergency mode to force switch to playDead.
   if(systemSensorData.emergencyMode && (!theMotionInfo.isMotion(MotionPhase::playDead) || theMotionRequest.motion != MotionRequest::playDead))
     theKeyStates.pressed[KeyStates::f1] = true;
+#elif defined TARGET_MUJOCO
+  // Nobody presses the buttons in the simulation. Do what a human does after starting
+  // B-Human: hold "stand" to switch to prepare, then hold "walk" to become active
+  // (see GameStateProvider and HandlePhysicalRobot).
+  theKeyStates.pressed[KeyStates::f1] = systemSensorData.emergencyMode
+                                        && (!theMotionInfo.isMotion(MotionPhase::playDead) || theMotionRequest.motion != MotionRequest::playDead);
+  if(systemSensorData.emergencyMode || !timeWhenEmergencyLeft) // The time is 0 before the first low state.
+    timeWhenEmergencyLeft = theFrameInfo.time;
+  const int timeSinceEmergencyLeft = theFrameInfo.getTimeSince(timeWhenEmergencyLeft);
+  theKeyStates.pressed[KeyStates::stand] = timeSinceEmergencyLeft >= 1000 && timeSinceEmergencyLeft < 4000;
+  theKeyStates.pressed[KeyStates::walk] = timeSinceEmergencyLeft >= 6000 && timeSinceEmergencyLeft < 16000;
 #endif
 }
 
@@ -140,12 +170,18 @@ void BoosterProvider::buttonEventHandler(const booster_interface::msg::ButtonEve
                                    : KeyStates::f1] = event == booster_interface::msg::PRESS_DOWN;
   }
 }
+#endif
 
+#ifdef BOOSTER_SDK
 void BoosterProvider::lowStateHandler(const booster_interface::msg::LowState& lowState)
 {
   // During termination, the low state might be empty
   if(lowState.motor_state_serial().size() != jointMapping.size())
     return;
+
+  // The MuJoCo simulation only fills the serial motor states.
+  const std::vector<booster_interface::msg::MotorState>& motorStateParallel = lowState.motor_state_parallel().empty()
+                                                                             ? lowState.motor_state_serial() : lowState.motor_state_parallel();
 
   SYNC;
   for(size_t joint = 0; joint < lowState.motor_state_serial().size(); ++joint)
@@ -154,8 +190,8 @@ void BoosterProvider::lowStateHandler(const booster_interface::msg::LowState& lo
     ASSERT(index != Joints::numOfJoints); // This is not reported correctly, because this thread has no BH_TRACE_INIT
     jointSensorData.angles[index] = lowState.motor_state_serial()[joint].q();
     jointSensorData.velocity[index] = lowState.motor_state_serial()[joint].dq();
-    jointSensorData.torque[index] = lowState.motor_state_parallel()[joint].tau_est();
-    const unsigned char temperature = lowState.motor_state_parallel()[joint].temperature();
+    jointSensorData.torque[index] = motorStateParallel[joint].tau_est();
+    const unsigned char temperature = motorStateParallel[joint].temperature();
     jointSensorData.temperatures[index] = temperature;
     jointSensorData.status[index] = temperature < minHot ?  JointSensorData::regular
                                     : temperature < minVeryHot ? JointSensorData::hot
@@ -193,6 +229,9 @@ void BoosterProvider::lowStateHandler(const booster_interface::msg::LowState& lo
   jointSensorData.timestamp = Time::getRealSystemTime();
   frameDataSignal.post();
 }
+#endif
+
+#ifdef TARGET_ROBOT
 
 void BoosterProvider::remoteControllerStateHandler(const booster_interface::msg::RemoteControllerState& remoteControllerState)
 {
@@ -311,7 +350,7 @@ void BoosterProvider::waitForFrameData()
 
 void BoosterProvider::waitForFrameData2()
 {
-#ifdef TARGET_ROBOT
+#ifdef BOOSTER_SDK
   bool lowStateReceived = false;
   if(frameDataSignal.wait(maxDelayForFrameData))
   {
@@ -375,7 +414,7 @@ void BoosterProvider::finishFrame2()
 {
   DEBUG_RESPONSE("module:BoosterProvider:segfault") *static_cast<volatile char*>(nullptr) = 0;
 
-#ifdef TARGET_ROBOT
+#ifdef BOOSTER_SDK
   ASSERT(lowCmd.motor_cmd().size() == jointMapping.size());
   FOREACH_ENUM(JointStiffnessMapping::Type, type)
     ASSERT(lowCmd.motor_cmd().size() <= theMotorParameters.controlParameters[type].size());
@@ -417,8 +456,20 @@ void BoosterProvider::finishFrame2()
     motorCmd.weight(1.f);
   }
 
-  VERIFY(lowCmdPublisher.Write(&lowCmd));
+#ifdef TARGET_MUJOCO
+  // MuJoCo holds the robot in its spawn pose until the first command arrives. Keep it there
+  // during the startup phase (playDead and the soft prepare stand, in which a human holds
+  // the real robot) and release it when B-Human starts to stand.
+  commandSent |= theMotionRequest.motion != MotionRequest::playDead && theMotionRequest.motion != MotionRequest::prepare
+                 && !theMotionInfo.isMotion(MotionPhase::playDead) && !theMotionInfo.isMotion(MotionPhase::prepare)
+                 && std::any_of(lowCmd.motor_cmd().begin(), lowCmd.motor_cmd().end(),
+                                [](const booster_interface::msg::MotorCmd& motorCmd) {return motorCmd.kp() > 0.f;});
+  if(commandSent)
+#endif
+    VERIFY(lowCmdPublisher.Write(&lowCmd));
+#endif
 
+#ifdef TARGET_ROBOT
   if(Global::getSettings().robotType == Settings::k1)
   {
     if(!systemSensorData.emergencyMode)

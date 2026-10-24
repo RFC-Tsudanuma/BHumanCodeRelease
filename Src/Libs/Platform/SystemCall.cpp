@@ -162,6 +162,9 @@ void SystemCall::mute(bool isMuted)
 
 int SystemCall::playSound(const char* name, bool force)
 {
+#ifdef TARGET_MUJOCO
+  force = false; // Several simulated robots run on the same PC, which are muted.
+#endif
   {
     const File file(std::string("Sounds/") + name, "rb");
     if(!file.exists())
@@ -180,6 +183,9 @@ int SystemCall::playSound(const char* name, bool force)
 
 int SystemCall::say(const char* text, bool force, float stretchFactor)
 {
+#ifdef TARGET_MUJOCO
+  force = false; // Several simulated robots run on the same PC, which are muted.
+#endif
 #ifdef LINUX
   return SoundPlayer::say(text, isMuted && !force, stretchFactor);
 #else

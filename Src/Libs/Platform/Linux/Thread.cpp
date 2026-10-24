@@ -62,6 +62,11 @@ void Thread::changePriority()
         VERIFY(!pthread_setschedparam(thread->native_handle(), SCHED_OTHER, &param));
         break;
       default:
+#ifdef TARGET_MUJOCO
+        // Real-time scheduling needs root access and the simulated robots share the PC anyway.
+        VERIFY(!pthread_setschedparam(thread->native_handle(), SCHED_OTHER, &param));
+        break;
+#endif
         param.sched_priority = priority;
         VERIFY(!pthread_setschedparam(thread->native_handle(), SCHED_FIFO, &param));
     }

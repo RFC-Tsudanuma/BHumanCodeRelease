@@ -31,7 +31,8 @@
 #include "Representations/MotionControl/MotionRequest.h"
 #include "Streaming/EnumIndexedArray.h"
 
-#ifdef TARGET_ROBOT
+#if defined TARGET_ROBOT || defined TARGET_MUJOCO
+#define BOOSTER_SDK // The Booster SDK connects to a real robot or to one simulated in MuJoCo (see Src/Apps/BHumanMuJoCo).
 #include <booster/idl/b1/ButtonEvent.h>
 #include <booster/idl/b1/LowCmd.h>
 #include <booster/idl/b1/LowState.h>
@@ -96,17 +97,23 @@ class BoosterProvider : public BoosterProviderBase, public Thread
   KeyStates joystickKeyStates; /** The simulated button key states with a joystick controller. */
   Semaphore frameDataSignal; /**< A signal used for synchronizing lowStateHandler() and waitForFrameData2(). */
 
-#ifdef TARGET_ROBOT
+#ifdef BOOSTER_SDK
   booster::robot::ChannelPublisher<booster_interface::msg::LowCmd> lowCmdPublisher; /**< Publisher for low level joint commands. */
-  booster::robot::ChannelSubscriber<booster_interface::msg::ButtonEventMsg> buttonEventSubscriber; /**< Subscriber for button events. */
   booster::robot::ChannelSubscriber<booster_interface::msg::LowState> lowStateSubscriber; /**< Subscriber for low level joint measurements. */
-  booster::robot::ChannelSubscriber<booster_interface::msg::RemoteControllerState> remoteControllerStateSubscriber; /**< Subscriber for the remote controller state. */
-  booster::robot::ChannelSubscriber<booster_interface::msg::RobotStatusDdsMsg> robotStatusSubscriber; /**< Subscriber for the robot status. */
   booster::robot::RobotMode robotMode = booster::robot::RobotMode::kCustom; /**< The current client mode of the robot. */
   booster_interface::msg::LowCmd lowCmd; /**< The current low level joint command. */
   size_t connectedJoints; /**< How many joints are connected? */
   bool armPositionsOK = false; /**< Are the arms correctly rotated after starting? */
   unsigned armPositionWarning = 0; /**< Arms are not correctly rotated and was said at this timestamp. */
+#endif
+#ifdef TARGET_MUJOCO
+  bool commandSent = false; /**< Was a command with stiffness already sent to the simulation? */
+  unsigned timeWhenEmergencyLeft = 0; /**< When was the emergency mode left at startup? */
+#endif
+#ifdef TARGET_ROBOT
+  booster::robot::ChannelSubscriber<booster_interface::msg::ButtonEventMsg> buttonEventSubscriber; /**< Subscriber for button events. */
+  booster::robot::ChannelSubscriber<booster_interface::msg::RemoteControllerState> remoteControllerStateSubscriber; /**< Subscriber for the remote controller state. */
+  booster::robot::ChannelSubscriber<booster_interface::msg::RobotStatusDdsMsg> robotStatusSubscriber; /**< Subscriber for the robot status. */
   PixelTypes::RGBPixel ledState; /**< The current state of the leds. **/
   unsigned timeWhenTemperatureRead = 0; /**< The last time the temperature was read. */
   static constexpr size_t numOfThermalZones = 2; /**< The number of thermal zones read in the CPU/GPU. */
@@ -123,7 +130,7 @@ class BoosterProvider : public BoosterProviderBase, public Thread
    * This method is called when the representation provided needs to be updated.
    * @param theJointSensorData The representation updated.
    */
-#ifdef TARGET_ROBOT
+#ifdef BOOSTER_SDK
   void update(JointSensorData& theJointSensorData) override {SYNC; theJointSensorData = jointSensorData;}
 #else
   void update(JointSensorData& theJointSensorData) override {SYNC; static_cast<JointAngles&>(theJointSensorData) = theJointRequest;}
@@ -165,13 +172,17 @@ class BoosterProvider : public BoosterProviderBase, public Thread
    * @param buttonEvent The button event message.
    */
   void buttonEventHandler(const booster_interface::msg::ButtonEventMsg& buttonEvent);
+#endif
 
+#ifdef BOOSTER_SDK
   /**
    * Process a low state message from the robot.
    * @param lowState The low state message.
    */
   void lowStateHandler(const booster_interface::msg::LowState& lowState);
+#endif
 
+#ifdef TARGET_ROBOT
   /**
    * Process a remote controller state message from the robot.
    * @param remoteControllerState The remote controller state message.

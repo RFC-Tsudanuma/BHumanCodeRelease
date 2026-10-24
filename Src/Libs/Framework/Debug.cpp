@@ -174,7 +174,11 @@ bool Debug::main()
     else
       sender.send(true);
   }
+#ifdef TARGET_MUJOCO
+  debugSender->clear(); // Nobody receives the debug data of a robot in an external simulation.
+#else
   debugSender->send();
+#endif
 #else
   for(DebugSender<MessageQueue>& sender : senders)
     sender.send();

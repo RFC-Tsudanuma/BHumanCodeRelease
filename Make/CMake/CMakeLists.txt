@@ -73,6 +73,10 @@ if(NOT BUILD_BOOSTER)
   set(BUILD_DESKTOP ON)
 endif()
 
+if(BUILD_MUJOCO)
+  add_definitions(-DTARGET_MUJOCO)
+endif()
+
 if(PYTHON_ONLY)
   set(MINIMAL_PROJECT ON)
 endif()
@@ -450,6 +454,10 @@ include("../CMake/Debugging.cmake")
 include("../CMake/Framework.cmake")
 include("../CMake/OptionsAndSkills.cmake")
 include("../CMake/B-Human.cmake")
+
+if(BUILD_MUJOCO)
+  include("../CMake/BHumanMuJoCo.cmake")
+endif()
 
 if(BUILD_DESKTOP)
   include("../CMake/Python.cmake")

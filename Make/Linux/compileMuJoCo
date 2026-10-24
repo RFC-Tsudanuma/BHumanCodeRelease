@@ -1,0 +1,15 @@
+#!/bin/bash
+# Builds BHumanMuJoCo, which runs one B-Human robot against an external MuJoCo
+# simulation of the K1 (see Src/Apps/BHumanMuJoCo/Main.cpp).
+# usage: compileMuJoCo [Debug|Develop|Release] [<booster sdk dir>]
+# The Booster SDK must contain lib/x86_64. The default is the one of booster_k1_locomotion.
+
+cd "$(dirname "$(which "$0")")"
+
+CONFIG="${1:-Develop}"
+BOOSTER_SDK_DIR="${2:-${BOOSTER_SDK_DIR:-$HOME/futbol_main/src/ros2_ws/src/booster_k1_locomotion/third_party/booster_sdk}}"
+BUILD_DIR="../../Build/Linux/CMake/MuJoCo$CONFIG"
+
+../Common/pullONNXRuntime
+cmake -DCMAKE_BUILD_TYPE="$CONFIG" -DBUILD_MUJOCO=ON -DBOOSTER_SDK_DIR="$BOOSTER_SDK_DIR" -G Ninja -S . -B "$BUILD_DIR" &&
+  cmake --build "$BUILD_DIR" --target BHumanMuJoCo
