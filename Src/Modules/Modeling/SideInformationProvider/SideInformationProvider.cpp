@@ -63,7 +63,9 @@ void SideInformationProvider::update(SideInformation& sideInformation)
   }
 
   if(theStaticInitialPose.isActive && !theGameState.isPenalized()
-     && (theExtendedGameState.playerStateLastFrame == GameState::penalizedPushing || theExtendedGameState.playerStateLastFrame == GameState::penalizedManual))
+     && (theExtendedGameState.playerStateLastFrame == GameState::penalizedPushing || theExtendedGameState.playerStateLastFrame == GameState::penalizedManual
+         || theExtendedGameState.returnFromGameControllerPenalty
+         || (theExtendedGameState.wasInitial() && (theGameState.isReady() || theGameState.isSet()))))
     largestXPossibleAtKnownPosition = theStaticInitialPose.staticPoseOnField.translation.x();
 
   sideInformation.largestXCoordinatePossible = largestXPossibleAtKnownPosition + distanceUncertaintyOffset +

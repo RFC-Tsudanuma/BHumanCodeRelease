@@ -54,16 +54,16 @@ OracledPerceptsProvider::OracledPerceptsProvider()
   oppRightPenaltyArea.dir2 = Vector2f(0.f, -1.f);
   intersections.push_back(oppRightPenaltyArea);
   FieldLineIntersections::Intersection oppLeftGoalArea;
-  oppLeftPenaltyArea.type = FieldLineIntersections::Intersection::IntersectionType::T;
-  oppLeftPenaltyArea.pos = Vector2f(theFieldDimensions.xPosOpponentGoalLine, theFieldDimensions.yPosLeftGoalArea);
-  oppLeftPenaltyArea.dir1 = Vector2f(-1.f, 0.f);
-  oppLeftPenaltyArea.dir2 = Vector2f(0.f, -1.f);
+  oppLeftGoalArea.type = FieldLineIntersections::Intersection::IntersectionType::T;
+  oppLeftGoalArea.pos = Vector2f(theFieldDimensions.xPosOpponentGoalLine, theFieldDimensions.yPosLeftGoalArea);
+  oppLeftGoalArea.dir1 = Vector2f(-1.f, 0.f);
+  oppLeftGoalArea.dir2 = Vector2f(0.f, -1.f);
   intersections.push_back(oppLeftGoalArea);
   FieldLineIntersections::Intersection oppRightGoalArea;
-  oppRightPenaltyArea.type = FieldLineIntersections::Intersection::IntersectionType::T;
-  oppRightPenaltyArea.pos = Vector2f(theFieldDimensions.xPosOpponentGoalLine, theFieldDimensions.yPosRightGoalArea);
-  oppRightPenaltyArea.dir1 = Vector2f(-1.f, 0.f);
-  oppRightPenaltyArea.dir2 = Vector2f(0.f, -1.f);
+  oppRightGoalArea.type = FieldLineIntersections::Intersection::IntersectionType::T;
+  oppRightGoalArea.pos = Vector2f(theFieldDimensions.xPosOpponentGoalLine, theFieldDimensions.yPosRightGoalArea);
+  oppRightGoalArea.dir1 = Vector2f(-1.f, 0.f);
+  oppRightGoalArea.dir2 = Vector2f(0.f, -1.f);
   intersections.push_back(oppRightGoalArea);
   FieldLineIntersections::Intersection oppRightCorner;
   oppRightCorner.type = FieldLineIntersections::Intersection::IntersectionType::L;
@@ -84,16 +84,16 @@ OracledPerceptsProvider::OracledPerceptsProvider()
   oppRightPenaltyCorner.dir2 = Vector2f(0.f, 1.f);
   intersections.push_back(oppRightPenaltyCorner);
   FieldLineIntersections::Intersection oppLeftGoalAreaCorner;
-  oppLeftPenaltyCorner.type = FieldLineIntersections::Intersection::IntersectionType::L;
-  oppLeftPenaltyCorner.pos = Vector2f(theFieldDimensions.xPosOpponentGoalArea, theFieldDimensions.yPosLeftGoalArea);
-  oppLeftPenaltyCorner.dir1 = Vector2f(1.f, 0.f);
-  oppLeftPenaltyCorner.dir2 = Vector2f(0.f, -1.f);
+  oppLeftGoalAreaCorner.type = FieldLineIntersections::Intersection::IntersectionType::L;
+  oppLeftGoalAreaCorner.pos = Vector2f(theFieldDimensions.xPosOpponentGoalArea, theFieldDimensions.yPosLeftGoalArea);
+  oppLeftGoalAreaCorner.dir1 = Vector2f(1.f, 0.f);
+  oppLeftGoalAreaCorner.dir2 = Vector2f(0.f, -1.f);
   intersections.push_back(oppLeftGoalAreaCorner);
   FieldLineIntersections::Intersection oppRightGoalAreaCorner;
-  oppRightPenaltyCorner.type = FieldLineIntersections::Intersection::IntersectionType::L;
-  oppRightPenaltyCorner.pos = Vector2f(theFieldDimensions.xPosOpponentGoalArea, theFieldDimensions.yPosRightGoalArea);
-  oppRightPenaltyCorner.dir1 = Vector2f(1.f, 0.f);
-  oppRightPenaltyCorner.dir2 = Vector2f(0.f, 1.f);
+  oppRightGoalAreaCorner.type = FieldLineIntersections::Intersection::IntersectionType::L;
+  oppRightGoalAreaCorner.pos = Vector2f(theFieldDimensions.xPosOpponentGoalArea, theFieldDimensions.yPosRightGoalArea);
+  oppRightGoalAreaCorner.dir1 = Vector2f(1.f, 0.f);
+  oppRightGoalAreaCorner.dir2 = Vector2f(0.f, 1.f);
   intersections.push_back(oppRightGoalAreaCorner);
   FieldLineIntersections::Intersection leftHalfwayLineCrossing;
   leftHalfwayLineCrossing.type = FieldLineIntersections::Intersection::IntersectionType::T;
@@ -281,7 +281,7 @@ void OracledPerceptsProvider::falseBallPercept(BallPercept& ballPercept)
   if(possiblePercepts.size())
   {
     auto percept = possiblePercepts[Random::uniformInt(possiblePercepts.size() - 1)];
-    if(!theMeasurementCovariance.transformWithCovLegacy(percept.positionInImage, theBallSpecification.radius, Vector2f(0.04f, 0.06f),
+    if(theMeasurementCovariance.transformWithCovLegacy(percept.positionInImage, theBallSpecification.radius, Vector2f(0.04f, 0.06f),
                                                         percept.positionOnField, percept.covarianceOnField))
       ballPercept = percept;
   }

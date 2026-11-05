@@ -779,6 +779,8 @@ Pose2f SelfLocator::getNewPoseReturnFromPenaltyPosition(bool leftSideOfGoal)
 
 Pose2f SelfLocator::getNewPoseAtWalkInPosition()
 {
+  if(theStaticInitialPose.isActive)
+    return theStaticInitialPose.staticPoseOnField;
   const SetupPoses::SetupPose& p = theSetupPoses.getPoseOfRobot(theGameState.playerNumber);
   Pose2f result;
   result.translation = p.position;
