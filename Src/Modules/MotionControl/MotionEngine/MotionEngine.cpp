@@ -102,8 +102,10 @@ void MotionEngine::update(JointRequest& jointRequest)
   // Check if the fall engine should intervene (this can happen during phases).
   if(phase->type != MotionPhase::fall && theFallGenerator.shouldCatchFall(motionRequest))
     phase = theFallGenerator.createPhase(motionRequest, *phase);
+#ifndef TARGET_MUJOCO // A PlayDeadPhase is only left through prepare, which nobody requests in the simulation.
   else if(phase->type != MotionPhase::playDead && theMotionRobotHealth.frameLostStatus == MotionRobotHealth::bodyDisconnect)
     phase = std::make_unique<PlayDeadPhase>(*this);
+#endif
 
   // 2.1 Check if the phase is done, i.e. a new phase has to be started.
   else if(phase->isDone(motionRequest) || (motionRequest.motion == MotionRequest::playDead && forcePlayDead && phase->type != MotionPhase::playDead))
