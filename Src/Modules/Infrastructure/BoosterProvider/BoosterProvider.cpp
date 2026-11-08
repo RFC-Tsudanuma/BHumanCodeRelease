@@ -16,6 +16,7 @@
 #include "Platform/SystemCall.h"
 #include "Platform/Time.h"
 #include <algorithm>
+#include <cstdio>
 #ifdef TARGET_ROBOT
 #include <fcntl.h>
 #include <linux/input.h>
@@ -370,6 +371,12 @@ void BoosterProvider::waitForFrameData2()
 
   const bool emergencyDetected = !connectedJoints || !lowStateReceived
                                  || robotMode != booster::robot::RobotMode::kCustom;
+#ifdef TARGET_MUJOCO
+  // A short stall of the PC must not make the simulated robot collapse: nobody can pick it up
+  // and the startup sequence in update(KeyStates&) cannot get it out of prepare once it is lying.
+  if(!systemSensorData.emergencyMode && emergencyDetected)
+    fprintf(stderr, "[%u ms] low_state gap > %d ms\n", Time::getRealSystemTime(), maxDelayForFrameData);
+#else
   if(!systemSensorData.emergencyMode && emergencyDetected)
   {
     if(!connectedJoints)
@@ -382,6 +389,7 @@ void BoosterProvider::waitForFrameData2()
       SystemCall::say("Emergency", true);
     systemSensorData.emergencyMode = true;
   }
+#endif
   else if(systemSensorData.emergencyMode && !emergencyDetected && connectedJoints == lowCmd.motor_cmd().size())
   {
     // Only leave emergency mode if the motion request is play dead and the requested stiffness is zero for all joints.
