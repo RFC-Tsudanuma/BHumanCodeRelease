@@ -52,7 +52,7 @@ class MuJoCoWorldProvider : public MuJoCoWorldProviderBase
   GroundTruthWorldState world; /**< The state of the latest packet. */
   unsigned age = 0; /**< The age of the latest packet (in ms). */
   bool received = false; /**< Was a packet received yet? */
-  Pose2f spawnPose; /**< The robot's pose in the first packet. The referee also returns it there after a penalty. */
+  int jumpFrames = 0; /**< For how many more frames StaticInitialPose::jump is reported. */
 
   /** Waits for the next packet. Only the newest one is used. */
   void receive();

@@ -10,6 +10,7 @@
 #include "Platform/Thread.h"
 #include "Platform/Time.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -35,6 +36,16 @@ namespace
   };
 
   constexpr std::size_t headerSize = offsetof(Packet, players);
+
+  // A change of the own pose between two packets larger than this cannot be walked, i.e. the
+  // sim teleported the robot (sim_scenario re-placing robots without restarting, or the referee
+  // moving a penalized robot). The packets arrive at ~60 Hz and at most maxWaitTime (100 ms)
+  // apart, in which walking moves at most ~100 mm / ~0.15 rad.
+  constexpr float jumpDistance = 150.f; // mm
+  constexpr float jumpRotation = 0.25f; // rad
+  // StaticInitialPose is provided in the Color thread but read by the SelfLocator in the
+  // Cognition thread. Report the jump for a few frames so that it is not missed.
+  constexpr int jumpReportFrames = 3;
 }
 
 MuJoCoWorldProvider::MuJoCoWorldProvider()
@@ -67,8 +78,15 @@ void MuJoCoWorldProvider::update(GroundTruthWorldState& groundTruthWorldState)
 
 void MuJoCoWorldProvider::update(StaticInitialPose& staticInitialPose)
 {
+  // The SelfLocator resets its samples to this pose when entering the game (INITIAL) and when
+  // returning from a penalty. On the robot, it is then standing at a known position. In the sim,
+  // that position is where the sim (spawn, re-placement) or the referee (penalty) put it, i.e.
+  // its current true pose. (Using the first packet's pose went wrong after a re-placement.)
   staticInitialPose.isActive = received;
-  staticInitialPose.staticPoseOnField = spawnPose;
+  staticInitialPose.staticPoseOnField = world.ownPose;
+  staticInitialPose.jump = jumpFrames > 0;
+  if(jumpFrames > 0)
+    --jumpFrames;
 }
 
 void MuJoCoWorldProvider::receive()
@@ -94,6 +112,7 @@ void MuJoCoWorldProvider::receive()
     std::memcpy(&packetAge, data + sizeWithoutAge, sizeof(packetAge));
   age = packetAge;
 
+  const Pose2f previousPose = world.ownPose;
   world.ownPose = Pose2f(packet.ownPose[2], packet.ownPose[0], packet.ownPose[1]);
   world.balls.resize(1);
   world.balls[0].position = Vector3f(packet.ball[0], packet.ball[1], packet.ball[2]);
@@ -110,7 +129,9 @@ void MuJoCoWorldProvider::receive()
     (p.ownTeam ? world.ownTeamPlayers : world.opponentTeamPlayers).push_back(player);
   }
 
-  if(!received)
-    spawnPose = world.ownPose;
+  // After a teleport, the SelfLocator also resets its samples to the new pose (jump).
+  if(received && ((world.ownPose.translation - previousPose.translation).norm() > jumpDistance
+                  || std::abs(Angle::normalize(world.ownPose.rotation - previousPose.rotation)) > jumpRotation))
+    jumpFrames = jumpReportFrames;
   received = true;
 }
