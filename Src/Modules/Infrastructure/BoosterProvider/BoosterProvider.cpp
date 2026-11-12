@@ -38,6 +38,7 @@ using namespace Main;
 namespace Main
 {
   extern std::string topicPrefix; /**< The prefix of the topics of the simulated robot, e.g. "rt/robot_6/". */
+  extern int frameMs; /**< If not 0, each low state advances the (simulated) time by this many ms. */
 }
 using namespace Main;
 #endif
@@ -227,7 +228,12 @@ void BoosterProvider::lowStateHandler(const booster_interface::msg::LowState& lo
   inertialSensorData.acc = {lowState.imu_state().acc()[0], lowState.imu_state().acc()[1], lowState.imu_state().acc()[2]};
   inertialSensorData.angle = {lowState.imu_state().rpy()[0], lowState.imu_state().rpy()[1], lowState.imu_state().rpy()[2]};
 
-  jointSensorData.timestamp = Time::getRealSystemTime();
+#ifdef TARGET_MUJOCO
+  // A simulation that is slower than real time sends one low state per physics step of frameMs.
+  if(frameMs)
+    Time::addSimulatedTime(frameMs);
+#endif
+  jointSensorData.timestamp = Time::getCurrentSystemTime(); // The real time unless the time is simulated
   frameDataSignal.post();
 }
 #endif
@@ -353,7 +359,13 @@ void BoosterProvider::waitForFrameData2()
 {
 #ifdef BOOSTER_SDK
   bool lowStateReceived = false;
+#ifdef TARGET_MUJOCO
+  // With simulated time, a frame without a new low state would advance the motion without the
+  // simulation. Only wait longer, so that the threads still run if the simulation stops.
+  if(frameDataSignal.wait(frameMs ? 1000 : maxDelayForFrameData))
+#else
   if(frameDataSignal.wait(maxDelayForFrameData))
+#endif
   {
     while(frameDataSignal.tryWait());
     lowStateReceived = true;

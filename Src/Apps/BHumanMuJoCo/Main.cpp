@@ -22,6 +22,7 @@
 #include "Framework/Settings.h"
 #include "Math/Constants.h"
 #include "Platform/SystemCall.h"
+#include "Platform/Time.h"
 #include "Streaming/FunctionList.h"
 #include "Streaming/TypeRegistry.h"
 
@@ -29,6 +30,7 @@
 namespace Main
 {
   std::string topicPrefix = "rt/";
+  int frameMs = 0;
 }
 
 static bool run = true;
@@ -73,12 +75,16 @@ int main(int argc, char* argv[])
       robotName = argv[++i];
     else if(!strcmp(argv[i], "--interface") && i + 1 < argc)
       networkInterface = argv[++i];
+    else if(!strcmp(argv[i], "--frame-ms") && i + 1 < argc)
+      Main::frameMs = std::atoi(argv[++i]);
     else
       playerNumber = 0;
   if(playerNumber < 1)
   {
     fprintf(stderr, "Usage: %s --player <n> [--team <n>] [--topic-prefix <rt/robot_6/>] [--location <name>]\n"
-            "          [--scenario <name>] [--robot-name <name>] [--interface <lo>] [-c <bh dir>]\n", argv[0]);
+            "          [--scenario <name>] [--robot-name <name>] [--interface <lo>] [--frame-ms <n>] [-c <bh dir>]\n"
+            "  --frame-ms: run on the simulated time, which each low state advances by n ms (also the motion\n"
+            "              cycle), for a simulation that steps by n ms and is not real-time (Isaac Sim).\n", argv[0]);
     return EXIT_FAILURE;
   }
   if(bhDir && chdir(bhDir) != 0)
@@ -95,7 +101,12 @@ int main(int argc, char* argv[])
 
   booster::robot::ChannelFactory::Instance()->Init(0, networkInterface);
 
-  Settings settings(robotName, Constants::motionCycleTime, Settings::k1, teamNumber,
+  if(Main::frameMs)
+  {
+    Time::initialize();
+    Time::setSimulatedTime(true);
+  }
+  Settings settings(robotName, Main::frameMs ? Main::frameMs * 0.001f : Constants::motionCycleTime, Settings::k1, teamNumber,
                     Settings::blue, Settings::red, playerNumber, location, scenario, 89);
   printf("Hi, I am %s, player %d of team %d (topics %s*, location %s, scenario %s).\n",
          robotName.c_str(), playerNumber, teamNumber, Main::topicPrefix.c_str(), location.c_str(), scenario.c_str());
